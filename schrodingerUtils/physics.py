@@ -1,16 +1,17 @@
 import numpy as np
+import tqdm
 
 from scipy import sparse
 import torch
 
-def createNDimensionalMeshGrid(numDimensions: int, pointsPerDimensions: int, dimensionLimits: tuple[int, int]):
+def createNDimensionalMeshGrid(numDimensions: int, pointsPerDimension: int, dimensionLimits: tuple[int, int]):
     """
     Create the mesh grid representing the discretized space to operate over.
 
     Note that numDimensions and pointsPerDimension will increase the computational complexity exponentially!!
     """
 
-    return np.meshgrid(*[np.linspace(dimensionLimits[0], dimensionLimits[1], pointsPerDimensions) for _ in range(numDimensions)])
+    return np.meshgrid(*[np.linspace(dimensionLimits[0], dimensionLimits[1], pointsPerDimension) for _ in range(numDimensions)])
 
 
 def getSecondPartialMatrixApproximation(pointsPerDimension: int):
@@ -35,7 +36,7 @@ def getKineticSchrodingerTerm(numDimensions: int, pointsPerDimension: int):
     
     return -1/2 * finalMatrix
 
-class TorchSchrodingerSolver():
+class TorchTimeIndependentSchrodingerSolver():
 
     def __init__(self, hamiltonian, pointsPerDimension: int):
         self.pointsPerDimension = pointsPerDimension
@@ -68,3 +69,47 @@ class TorchSchrodingerSolver():
                 .reshape(self.pointsPerDimension, self.pointsPerDimension)
                 .cpu()
             )
+    
+class TorchTimeDependentSchrodingerSolver():
+
+    def __init__(self, potential, discreteSpatialMeshgrid,  discreteTemporalSpacing: float):
+        """
+        Creates a new Time Dependent Schrodinger Solver using the Finite Difference method.
+
+        Assumes potential is infinite at edges.
+        """
+        
+        self.potential = potential
+        
+        self.discreteSpatialMeshgrid = discreteSpatialMeshgrid
+        self.numDimensions = len(discreteSpatialMeshgrid)
+        self.pointsPerDimension = len(discreteSpatialMeshgrid[0])
+        self.dimensionalLimits = (np.min(discreteSpatialMeshgrid[0]), np.max(discreteSpatialMeshgrid[0]))
+
+        self.discreteSpatialSpacing = 1 / (self.pointsPerDimension - 1)
+        self.discreteTemporalSpacing = discreteTemporalSpacing
+
+    def getDelTimeOverDelXSquare(self) -> float:
+        """
+        This value acts as a measure of how good the finite difference method will hold. Smaller is better!
+        """
+
+        return self.discreteTemporalSpacing / self.discreteSpatialSpacing**2
+    
+    def normalizePsi(self, psi):
+        normalizationFactor = np.sum(np.abs(psi)**2)*self.discreteSpatialSpacing
+        return psi / normalizationFactor
+
+    def solve(self, initialPsi, numTimesteps: int):
+        spatialDimensions = [self.pointsPerDimension for _ in range(self.numDimensions)]
+        psi = np.zeros([numTimesteps, *spatialDimensions])
+        psi[0] = initialPsi
+
+        return self._compute_psi(psi.astype(complex), numTimesteps)
+
+    def _compute_psi(self, psi, numTimesteps: int):
+        for t in tqdm.tqdm(range(1, numTimesteps), "Timestep: "):
+            for i in range(1, self.pointsPerDimension-1):
+                psi[t][i] = psi[t-1][i] + 1j/2 * self.getDelTimeOverDelXSquare() * (psi[t-1][i+1] - 2*psi[t-1][i] + psi[t-1][i-1]) - 1j * self.discreteTemporalSpacing * self.potential[i]*psi[t-1][i]
+            psi[t] = self.normalizePsi(psi[t])
+        return psi
