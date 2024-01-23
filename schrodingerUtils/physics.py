@@ -70,7 +70,7 @@ class TorchTimeIndependentSchrodingerSolver():
                 .cpu()
             )
     
-class TorchTimeDependentSchrodingerSolver():
+class TimeDependentSchrodingerSolver():
 
     def __init__(self, potential, discreteSpatialMeshgrid,  discreteTemporalSpacing: float):
         """
