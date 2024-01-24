@@ -38,7 +38,8 @@ def getKineticSchrodingerTerm(numDimensions: int, pointsPerDimension: int):
 
 class TorchTimeIndependentSchrodingerSolver():
 
-    def __init__(self, hamiltonian, pointsPerDimension: int):
+    def __init__(self, hamiltonian, numDimensions: int, pointsPerDimension: int):
+        self.numDimensions = numDimensions
         self.pointsPerDimension = pointsPerDimension
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if self.device == "cpu":
@@ -66,7 +67,7 @@ class TorchTimeIndependentSchrodingerSolver():
         return (
             self.eigenvalues[eigenstateIndex], 
             self.eigenvectors.T[eigenstateIndex]
-                .reshape(self.pointsPerDimension, self.pointsPerDimension)
+                .reshape([self.pointsPerDimension for _ in range(self.numDimensions)])
                 .cpu()
             )
     
